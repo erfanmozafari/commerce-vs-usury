@@ -9,9 +9,9 @@ class Land:
     self.rng = np.random.default_rng()
 
   def did_suceed(self):
-    return 1 if self.rng.random() >= 0.1 else 0
-  
-  def work_on(self, worker):
+    return 1 if self.rng.random() > 0.1 else -1
+
+  def work_on(self, worker, worker_thirst):
     R = self.health * self.max_profit * self.did_suceed()
-    self.health /= 2.0
+    self.health -= worker_thirst * self.health 
     return R

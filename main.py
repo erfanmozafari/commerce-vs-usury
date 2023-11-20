@@ -21,9 +21,7 @@ def run():
   MAX_START = 100.0
   N = 1000
   N_LANDS = 5
-  INTEREST_RATE = 0.3
-  LOAN_AMOUNT_COM = MAX_PROFIT
-  LOAN_AMOUNT_USU = LOAN_AMOUNT_COM
+  LOAN_AMOUNT = MAX_PROFIT
 
   for i in range(100):
     money = rng.random() * MAX_START
@@ -37,55 +35,48 @@ def run():
   results['STD'] = np.std(moneys)
   results['result'] = []
 
-  for i in range(5):
-    for type in ['commerce', 'usury']:    
-        lands = []
-        for i in range(N_LANDS):
-          lands.append(Land(i, MAX_PROFIT))
-        
-        result = {}
-        result['MAX_PROFIT'] = MAX_PROFIT
-        # result['N_LANDS'] = N_LANDS
-        # result['N'] = N
+  counter = 0
 
-        res = None
-        if type == 'usury':
-          result['interest'] = INTEREST_RATE
-          res = deal(type, ppl, lands, LOAN_AMOUNT_USU, N, INTEREST_RATE)
-        else:
-          result['amount'] = LOAN_AMOUNT_COM
-          res = deal(type, ppl, lands, LOAN_AMOUNT_COM, N, 0.0)
+  for type in ['commerce','usury']:   
+    for LOAN_AMOUNT in [MAX_PROFIT/4.0, MAX_PROFIT/3.0, MAX_PROFIT/2.0, MAX_PROFIT]:
+        for INTEREST_RATE in [0.02, 0.03, 0.05, 0.13, 0.25, 0.31, 0.55]:
+          for i in range(50):
+            print(str(round(counter/float(2*4*7*50) *100, 2)), '% klaar,')
+            
+            lands = []
+            for i in range(N_LANDS):
+              lands.append(Land(i, MAX_PROFIT))
+            
+            result = {}
+            result['type'] = type
+            result['LOAN_AMOUNT'] = LOAN_AMOUNT
 
-        # result['init_ppl'] = [p.serialize(ppl) for p in ppl]
+            res = None
+            if type == 'usury':
+              result['interest'] = INTEREST_RATE
+              res = deal(type, ppl, lands, LOAN_AMOUNT, N, INTEREST_RATE)
+            else:
+              res = deal(type, ppl, lands, LOAN_AMOUNT, N, 0.0)
 
-        # moneys1 = [p.money for p in ppl]
-        # print("MEAN: " + str(np.mean(moneys1)) + '\n' + "STD: " + str(np.std(moneys1)))
+            result['mean'] = res['mean']
+            result['STD'] = res['STD']
+            result['percentiles'] = res['percentiles']
 
-        # commerce()
-        # print(str(deals_annuled) + ' deals annuled.')
-        # print([round(l.health, 2) for l in lands])
-        # moneys2 = [p.money for p in ppl]
-        # print("MEAN: " + str(np.mean(moneys2)) + '\n' + "STD: " + str(np.std(moneys2)))
-        # print(np.array(moneys2) - np.array(moneys1))
+            result['need'] = res['need']
+            result['greed'] = res['greed']
 
-        # result['final_ppl'] = [p.serialize(ppl) for p in res['ppl']]
-        # moneys = np.array([x.money for x in res['ppl']])
+            result['deals_done'] = len(res['deals'])
+            result['deals_annuled'] = res['deals_annuled']
+            result['lands_health'] = res['lands_health']
+            # result['ppl'] = res['ppl']
+            
 
-        result['mean'] = res['mean'] - results['mean']
-        result['STD'] = res['STD'] - results['STD']
-        result['percentiles'] = res['percentiles']
-
-        # result['need'] = res['need']
-        # result['greed'] = res['greed']
-        # result['env_con'] = res['env_con']
-
-        result['deals'] = res['deals']
-        
-        result['deals_annuled'] = res['deals_annuled']
-        result['lands_health'] = res['lands_health']
-        result['type'] = type
-
-        results['result'].append(result)
+            results['result'].append(result)
+            counter += 1
+      
+  results['MAX_PROFIT'] = MAX_PROFIT
+  results['N'] = N_LANDS*N
+  
 
   with open('results.json', mode='w', encoding='utf-8') as file:
     json.dump(results, file)
@@ -107,14 +98,13 @@ def deal(type, ppl, lands, amount, n, r):
     sorted_ppl = sorted(ppls, key=lambda x: x.money)
 
     try:
-      loan_possible_index = np.where(np.array([p.money for p in sorted_ppl]) > 0.0)[0][0]
+      loan_possible_index = np.where(np.array([p.money for p in sorted_ppl]) > amount)[0][0]
     except:
-      # print(np.array([p.money for p in sorted_ppl]))
       continue
 
     for land in landz:
-      worker_i = rng.integers(len(ppl)) - 1
-      loaner_i = rng.integers(worker_i + 1, len(ppl))
+      loaner_i = rng.integers(loan_possible_index, len(ppl))
+      worker_i = rng.integers(loaner_i+1)
 
       worker = sorted_ppl[worker_i]
       loaner = sorted_ppl[loaner_i]
@@ -127,7 +117,6 @@ def deal(type, ppl, lands, amount, n, r):
         deal = Usury(t, loaner, worker, land, amount, r)
       
       if not deal.is_possible():
-        # print('yo')
         continue
       deal.execute(ppls)
 
@@ -136,8 +125,6 @@ def deal(type, ppl, lands, amount, n, r):
         deals_annuled += 1
         land.health += (1 - land.health) / 4.0
       else:
-        if deal.loss:
-          pass
         loaner_info = loaner.get_need_greed(ppls)
         loaner_info = (loaner_info[0], loaner_info[1], loaner.env_con)
         loaner_info = [round(x, 2) for x in loaner_info] + [loaner.money]
@@ -150,14 +137,11 @@ def deal(type, ppl, lands, amount, n, r):
           deals.append({
               'loaner': loaner_info,
               'worker': worker_info,
-              # 'land': round(land.health, 2),
               'amount': amount, 
               'loss': deal.loss,
-              # 'annuled' : deal.annuled,
           })
 
   result['ppl'] = ppls
-
 
   moneys = np.array([x.money for x in ppls])
   result['mean'] = np.mean(moneys)
@@ -166,51 +150,19 @@ def deal(type, ppl, lands, amount, n, r):
   result['deals'] = deals
 
   # result['need'] = np.mean(np.array([(x['loaner'][0]+x['worker'][0])/2 for x in deals]))
-  # if result['need'] < 0.0: 
-    # print(np.array([x['loaner'] for x in deals]))
+  result['need'] = np.mean(np.array([person.get_need_greed(ppls)[0] for person in ppls]))
+  result['greed'] = np.mean(np.array([person.get_need_greed(ppls)[1] for person in ppls]))
   # result['greed'] = np.mean(np.array([(x['loaner'][1]+x['worker'][1])/2 for x in deals]))
   # result['env_con'] = np.mean(np.array([(x['loaner'][2]+x['worker'][2])/2 for x in deals]))
   result['percentiles'] = [np.percentile(moneys, q) for q in range(1,100,24)]
 
   result['deals_annuled'] = float(deals_annuled)
   result['lands_health'] = np.mean(np.array([l.health for l in landz]))
+  result['ppl'] = [person.serialize(ppls) for person in ppls]
+
+
 
   return result
 
-  
+
 run()
-      
-
-
-# result = {}
-# result['init_ppl'] = [p.serialize(ppl) for p in ppl]
-
-# moneys1 = [p.money for p in ppl]
-# print("MEAN: " + str(np.mean(moneys1)) + '\n' + "STD: " + str(np.std(moneys1)))
-
-# commerce()
-# print(str(deals_annuled) + ' deals annuled.')
-# print([round(l.health, 2) for l in lands])
-# moneys2 = [p.money for p in ppl]
-# print("MEAN: " + str(np.mean(moneys2)) + '\n' + "STD: " + str(np.std(moneys2)))
-# # print(np.array(moneys2) - np.array(moneys1))
-
-# result['final_ppl'] = [p.serialize(ppl) for p in ppl]
-
-# result['deals'] = deals
-# result['deals_annuled'] = deals_annuled
-# result['lands'] = [l.health for l in lands]
-# result['type'] = 'commerce'
-# result['ML'] = MAX_LOAD
-# result['LCP'] = LOAN_CAP_RATIO
-# result['N'] = N
-
-
-# all_results = []
-# with open('results.json', encoding='utf-8') as results:
-#   all_results = json.load(results)
-
-# all_results.append(result)
-# with open('results.json', mode='w', encoding='utf-8') as results:
-#   json.dump(all_results, results)
-
